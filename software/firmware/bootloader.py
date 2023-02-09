@@ -7,6 +7,7 @@ import machine
 import europi
 from europi import CHAR_HEIGHT, CHAR_WIDTH, Button, reset_state
 from europi_script import EuroPiScript
+from screensaver import screen_saver
 
 from ui import Menu
 
@@ -70,13 +71,21 @@ class BootloaderMenu(EuroPiScript):
             self.run_request = state
 
         else:
+            t = time.time()
+
             # let the user make a selection
             old_selected = -1
             while not self.run_request:
                 if old_selected != self.menu.selected:
                     old_selected = self.menu.selected
                     self.menu.draw_menu()
+                    t = time.time()
                 time.sleep(0.1)
+                # show the screensaver if no action for 10 sec :
+                if (time.time() - t) > 10:
+                    screen_saver()
+                    t = time.time()
+
             self.save_state_str(self.run_request)
 
         # setup the exit handlers, and execute the selection
