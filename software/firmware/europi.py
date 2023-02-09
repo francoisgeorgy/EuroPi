@@ -34,9 +34,14 @@ if sys.implementation.name == "micropython":
 else:
     TEST_ENV = True  # This var is set when we don't have any real hardware, for example in a test or doc generation setting
 try:
-    from calibration_values import INPUT_CALIBRATION_VALUES, OUTPUT_CALIBRATION_VALUES
+    from calibration_values import (
+        INPUT_CALIBRATION_POINTS,
+        INPUT_CALIBRATION_VALUES,
+        OUTPUT_CALIBRATION_VALUES,
+    )
 except ImportError:
     # Note: run calibrate.py to get a more precise calibration.
+    INPUT_CALIBRATION_POINTS = [0, 10]
     INPUT_CALIBRATION_VALUES = [384, 44634]
     OUTPUT_CALIBRATION_VALUES = [
         0,
@@ -138,7 +143,7 @@ class AnalogueReader:
         # Over-samples the ADC and returns the average.
         value = 0
         for _ in range(samples or self._samples):
-            value += self.pin.read_u16()
+            value += self.pin.read_u16() & 0xFF80  # mask the 7 low bits because they are just noise
         return round(value / (samples or self._samples))
 
     def set_samples(self, samples):
@@ -203,12 +208,20 @@ class AnalogueInput(AnalogueReader):
         self.MIN_VOLTAGE = min_voltage
         self.MAX_VOLTAGE = max_voltage
         self._gradients = []
+        if len(INPUT_CALIBRATION_POINTS) != len(INPUT_CALIBRATION_VALUES):
+            raise Exception(
+                "The input calibration process did not complete properly. Please do it again."
+            )
         for index, value in enumerate(INPUT_CALIBRATION_VALUES[:-1]):
             try:
-                self._gradients.append(1 / (INPUT_CALIBRATION_VALUES[index + 1] - value))
+                self._gradients.append(
+                    (INPUT_CALIBRATION_POINTS[index + 1] - INPUT_CALIBRATION_POINTS[index])
+                    / (INPUT_CALIBRATION_VALUES[index + 1] - value)
+                )
+                # self._gradients.append(1 / (INPUT_CALIBRATION_VALUES[index + 1] - value))
             except ZeroDivisionError:
                 raise Exception(
-                    "The input calibration process did not complete properly. Please complete again with rack power turned on"
+                    "The input calibration process did not complete properly. Please complete again with rack power turned on."
                 )
         self._gradients.append(self._gradients[-1])
 
@@ -216,20 +229,42 @@ class AnalogueInput(AnalogueReader):
         """Current voltage as a relative percentage of the component's range."""
         # Determine the percent value from the max calibration value.
         reading = self._sample_adc(samples)
+        # TODO: we should take INPUT_CALIBRATION_VALUES[0] into account
+        # FIXME: max_value = max(reading, INPUT_CALIBRATION_VALUES[-1] - INPUT_CALIBRATION_VALUES[0])
         max_value = max(reading, INPUT_CALIBRATION_VALUES[-1])
         return reading / max_value
 
     def read_voltage(self, samples=None):
         reading = self._sample_adc(samples)
-        max_value = max(reading, INPUT_CALIBRATION_VALUES[-1])
-        percent = reading / max_value
-        # low precision vs. high precision
-        if len(self._gradients) == 2:
-            cv = 10 * (reading / INPUT_CALIBRATION_VALUES[-1])
+        try:
+            index = (
+                next(index for index, v in enumerate(INPUT_CALIBRATION_VALUES) if v >= reading) - 1
+            )
+        except StopIteration:
+            index = len(INPUT_CALIBRATION_VALUES) - 1
+        if index < 0:
+            cv = 0
         else:
-            index = int(percent * (len(INPUT_CALIBRATION_VALUES) - 1))
-            cv = index + (self._gradients[index] * (reading - INPUT_CALIBRATION_VALUES[index]))
+            cv = INPUT_CALIBRATION_POINTS[index] + self._gradients[index] * (
+                reading - INPUT_CALIBRATION_VALUES[index]
+            )
         return clamp(cv, self.MIN_VOLTAGE, self.MAX_VOLTAGE)
+
+    def read_voltage_and_sample(self, samples=None):
+        reading = self._sample_adc(samples)
+        try:
+            index = (
+                next(index for index, v in enumerate(INPUT_CALIBRATION_VALUES) if v >= reading) - 1
+            )
+        except StopIteration:
+            index = len(INPUT_CALIBRATION_VALUES) - 1
+        if index < 0:
+            cv = 0
+        else:
+            cv = INPUT_CALIBRATION_POINTS[index] + self._gradients[index] * (
+                reading - INPUT_CALIBRATION_VALUES[index]
+            )
+        return clamp(cv, self.MIN_VOLTAGE, self.MAX_VOLTAGE), reading
 
 
 class Knob(AnalogueReader):
@@ -513,7 +548,9 @@ class Output:
 
         self._gradients = []
         for index, value in enumerate(OUTPUT_CALIBRATION_VALUES[:-1]):
-            self._gradients.append(OUTPUT_CALIBRATION_VALUES[index + 1] - value)
+            self._gradients.append(
+                OUTPUT_CALIBRATION_VALUES[index + 1] - value
+            )  # with implicit div by 1 (delta x)
         self._gradients.append(self._gradients[-1])
 
     def _set_duty(self, cycle):
@@ -526,8 +563,11 @@ class Output:
         if voltage is None:
             return self._duty / MAX_UINT16
         voltage = clamp(voltage, self.MIN_VOLTAGE, self.MAX_VOLTAGE)
-        index = int(voltage // 1)
-        self._set_duty(OUTPUT_CALIBRATION_VALUES[index] + (self._gradients[index] * (voltage % 1)))
+        index, decimal = (int(voltage // 1), voltage % 1)
+        index = min(index, len(OUTPUT_CALIBRATION_VALUES) - 1)
+        duty = int(OUTPUT_CALIBRATION_VALUES[index] + (decimal * self._gradients[index]))
+        self._set_duty(duty)
+        return duty
 
     def on(self):
         """Set the voltage HIGH at 5 volts."""
