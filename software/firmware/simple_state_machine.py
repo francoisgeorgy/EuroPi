@@ -108,7 +108,4 @@ class SimpleStateMachine:
                 next_state = self.states[self._state].execute_action(self.action)
                 if next_state:
                     self._state = next_state
-            # elif "ANY" in self.states:
-            #     print("execute ANY", self.action)
-            #     self.states["ANY"].execute_action(self.action)
             self.action = None
