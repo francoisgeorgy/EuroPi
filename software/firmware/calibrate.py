@@ -1,3 +1,30 @@
+"""
+Custom calibration
+author: François Georgy (https://github.com/francoisgeorgy)
+date: 2023-01-20
+labels: calibration
+
+New calibration procedure that allows to calibrate with different sets of calibration points (reference voltages).
+
+The user can fine-tune each calibration point during the procedure. For example, if the user does not has a precise
+voltage source but has a precise voltage meter. In that case, it can measure the real voltage applied to analog-in
+and fine-tune the value used by the calibration procedure.
+To do that, the two knobs can be used to :
+- Knob-1 : adjust the first decimal digit
+- Knob-2 : adjust the second decimal digit
+This results in a fine-tuning range of -0.50V to +0.49V
+
+The output calibration is fully automatic and no fine tuning can be done or is necessary.
+To get better results (this is from empirical testing), use a buffered mult between CV1 Out and Analog In :
+- connect CV1 Out to the buffered mult input
+- connect the buffered mult output to Analog in
+
+A detailed documentation about the calibration process
+is available at https://francoisgeorgy.ch/modular/europi/custom-calibration-details/
+
+TODO : add the possibility to skip a calibration point
+TODO : add the possibility to skip the input calibration
+"""
 from machine import Pin, ADC, PWM, reset
 from time import sleep
 
@@ -123,18 +150,14 @@ class Calibrate(EuroPiScript):
         for index, value in enumerate(self.readings[:-1]):
             try:
                 self.ain_gradients.append(
-                    (self.points[index + 1] - self.points[index])
-                    / (self.readings[index + 1] - value)
+                    (self.points[index + 1] - self.points[index]) /
+                    (self.readings[index + 1] - value)
                 )
             except ZeroDivisionError:
-                # TODO: review error message
-                raise Exception(
-                    "The input calibration process did not complete properly. Please complete again with rack power turned on."
-                )
+                raise Exception("Invalid calibration results. Check power and try again.")
         self.ain_gradients.append(self.ain_gradients[-1])
 
     def reading_to_voltage(self, reading):
-        # reading = self._sample_adc(samples)
         try:
             index = next(index for index, v in enumerate(self.readings) if v >= reading) - 1
         except StopIteration:
@@ -160,21 +183,36 @@ class Calibrate(EuroPiScript):
         with open(f"lib/calibration_values.py", "w") as file:
             file.write(f"INPUT_CALIBRATION_POINTS={self.points}")
             file.write(f"\nINPUT_CALIBRATION_VALUES={self.readings}")
-        centered("Saving done.", "Press B2 to", "calib. outputs")
+        centered(
+            "Saving done.",
+            "Press B2 to",
+            "calib. outputs"
+        )
 
     def execute_outputs_calibration(self):
         global cv1
 
-        centered("Calibrating", f"0 V", "please wait...")
+        centered(
+            "Calibrating",
+            f"0 V",
+            "please wait..."
+        )
         duty = 0
         output_duties = [duty]
         cv1.duty_u16(duty)
         sleep(0.5)
         reading = sample()
-        centered(f"Cal 0 V", f"adc: {reading}", f"ain: {self.reading_to_voltage(reading):0.3} V")
+        centered(
+            f"Cal 0 V",
+            f"adc: {reading}",
+            f"ain: {self.reading_to_voltage(reading):0.3} V"
+        )
         for v in range(1, 11):
             expected_reading = self.cv_to_reading(v)
             while abs(reading - expected_reading) > 0.002 and reading < expected_reading:
+                # The closer we get to the expected voltage (reading), the finer
+                # we adjust (increase) the CV1 duty cycle and we also give CV1
+                # a little more time to stabilize.
                 wait = 0
                 if reading / expected_reading < 0.5:
                     duty += 1000
@@ -200,7 +238,9 @@ class Calibrate(EuroPiScript):
             output_duties.append(duty)
             # Display the result before continuing with the next calibration point :
             centered(
-                f"Cal {v} V", f"duty = {duty}", f"ain: {self.reading_to_voltage(reading):0.2f} V"
+                f"Cal {v} V",
+                f"duty = {duty}",
+                f"ain: {self.reading_to_voltage(reading):0.2f} V"
             )
             sleep(1)
 
@@ -216,35 +256,65 @@ class Calibrate(EuroPiScript):
 
     def display_power_reminder(self, action=None):
         if usb.value() == 1:
-            centered("Confirm rack", "power is ON", "Back   Confirm")
+            centered(
+                "Confirm rack",
+                "power is ON",
+                "Back   Confirm")
         else:
-            centered("Rack power", "is ON.", "       Continue")
+            centered(
+                "Rack power",
+                "is ON.",
+                "       Continue")
 
     def display_start_menu(self, action=None):
         centered(
-            f"Input calib.", f"{len(CALIBRATION_SERIES[self.serie])} points", "K1:points B2:go"
+            f"Input calib.",
+            f"{len(CALIBRATION_SERIES[self.serie])} points",
+            "K1:points B2:go"
         )
 
     def display_current_point(self, action=None):
         v = sample()
-        centered(f"Apply {self.points[self.current_point]:0.2f} V", f"adc: {v}", "Abort        OK")
+        centered(
+            f"Apply {self.points[self.current_point]:0.2f} V",
+            f"adc: {v}",
+            "Abort        OK"
+        )
 
     def display_result(self, action=None):
         centered(
-            f"{self.points[self.current_point]}V = {self.current_reading}", " ", "Retry   Confirm"
+            f"{self.points[self.current_point]}V = {self.current_reading}",
+            " ",
+            "Retry   Confirm"
         )
 
     def display_output_calibration(self, action=None):
-        centered("Values saved", "B2 to", "calib. outputs")
+        centered(
+            "Values saved",
+            "B2 to",
+            "calib. outputs"
+        )
 
     def display_connect_output(self, action=None):
-        centered("Plug CV1 into", "analogue in.", "             OK")
+        centered(
+            "Plug CV1 into",
+            "analogue in.",
+            "             OK"
+        )
 
     def display_output_done(self, action=None):
-        centered("All done!", " ", "B2 to restart")
+        centered(
+            "All done!",
+            " ",
+            "B2 to restart"
+        )
 
     def display_error(self, action=None):
-        centered("ERROR", "Invalid data", "B2 to restart")
+        centered(
+            "ERROR",
+            "Invalid data",
+            "B2 to restart"
+        )
 
     # --------------------------------------------------------------------------
     # TRANSITIONS
@@ -339,7 +409,7 @@ class Calibrate(EuroPiScript):
                 self.knob2()
             elif self.m.in_state("current_point"):
                 self.m.do_action("refresh_display")
-                sleep(0.2)  # TODO: is this delay necessary?
+                sleep(0.2)
 
 
 if __name__ == "__main__":
