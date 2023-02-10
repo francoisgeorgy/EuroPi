@@ -4,12 +4,14 @@ author: François Georgy (https://github.com/francoisgeorgy)
 date: 2023-01-25
 labels: cv, tuner
 
-Display the voltage applied to the analog input.
-
-Copy this voltage to the CV1 output.
+Display the Analog In measured voltage, and the min and max values.
 
 If the europi.AnalogueInput class includes the method read_voltage_and_sample(),
 then the ADC value is also displayed.
+
+Button B1 resets the min and max values.
+
+The voltage is also copied to the CV1 input. The CV1 output must will the Analog input.
 
 Requirements: contrib.largefont package.
 """
