@@ -25,10 +25,10 @@ from contrib.largefont.largefont_writer import Writer
 VOLTS_PER_SEMITONE = 1 / 12
 
 
-class VoltageMonitor(EuroPiScript):
+class CvMonitor(EuroPiScript):
     @classmethod
     def display_name(cls):
-        return "Voltage Monitor"
+        return "CV Monitor"
 
     def __init__(self):
         super().__init__()
@@ -71,4 +71,4 @@ class VoltageMonitor(EuroPiScript):
 
 if __name__ == "__main__":
     oled.contrast(0)  # dim the display
-    VoltageMonitor().main()
+    CvMonitor().main()
