@@ -38,9 +38,18 @@ from europi_script import EuroPiScript
 # fmt: off
 CALIBRATION_SERIES = [
     [0, 10],
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     [0, 2.5, 5, 7.5, 10],
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 ]
+
+CALIBRATION_SERIES_NAMES = [
+    "Simple 2 pts",
+    "Classic 0..10",
+    "Custom 5 pts",
+    "Custom 0..11"
+]
+# TODO: merge the two above data structures in a single one (list of dict).
 # fmt: on
 
 ain = None
@@ -279,8 +288,8 @@ class Calibrate(EuroPiScript):
     def display_start_menu(self, action=None):
         centered(
             f"Input calib.",
-            f"{len(CALIBRATION_SERIES[self.serie])} points",
-            "K1:points B2:go"
+            f"{CALIBRATION_SERIES_NAMES[self.serie]}",
+            "K1:sel.   B2:go"
         )
 
     def display_current_point(self, action=None):
@@ -301,7 +310,7 @@ class Calibrate(EuroPiScript):
     def display_output_calibration(self, action=None):
         centered(
             "Values saved",
-            "B2 to",
+            "Press B2 to",
             "calib. outputs"
         )
 
