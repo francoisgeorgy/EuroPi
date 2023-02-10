@@ -22,6 +22,8 @@ To get better results (this is from empirical testing), use a buffered mult betw
 A detailed documentation about the calibration process
 is available at https://francoisgeorgy.ch/modular/europi/custom-calibration-details/
 
+Requirements: simple_state_machine.py
+
 TODO : add the possibility to skip a calibration point
 TODO : add the possibility to skip the input calibration
 """
