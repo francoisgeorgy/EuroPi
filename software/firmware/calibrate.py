@@ -61,10 +61,18 @@ def centered(line1, line2="", line3=""):
 
 
 def sample():
-    """Sample the input 256 times and returns the average value."""
+    """Over-samples the ADC and returns the average.
+
+    When reading the ADC, we mask the 7 lower bits because they are just noise.
+
+    This does NOT increase the precision (lost information can not be recreated),
+    but this somewhat gives the user the impression that the ADC is more stable.
+
+    This is helpful when one want to display the ADC reading or the corresponding voltage.
+    """
     value = 0
     for _ in range(256):
-        value += ain.read_u16() & 0xFF80  # mask the 7 low bits because they are just noise
+        value += ain.read_u16() & 0xff80
     return round(value / 256)
 
 

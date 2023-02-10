@@ -140,10 +140,18 @@ class AnalogueReader:
         self.set_deadzone(deadzone)
 
     def _sample_adc(self, samples=None):
-        # Over-samples the ADC and returns the average.
+        """Over-samples the ADC and returns the average.
+
+        When reading the ADC, we mask the 7 lower bits because they are just noise.
+
+        This does NOT increase the precision (lost information can not be recreated),
+        but this somewhat gives the user the impression that the ADC is more stable.
+
+        This is helpful when one want to display the ADC reading or the corresponding voltage.
+        """
         value = 0
         for _ in range(samples or self._samples):
-            value += self.pin.read_u16() & 0xFF80  # mask the 7 low bits because they are just noise
+            value += self.pin.read_u16() & 0xff80
         return round(value / (samples or self._samples))
 
     def set_samples(self, samples):
