@@ -6,6 +6,11 @@ labels: cv, tuner
 
 Display the note corresponding to the CV value applied at the analog input.
 
+MIDI middle-C (note #60) is C4 and correspond to 5V.
+
+The display shows the ADC reading (top left), the MIDI note number (top right),
+the Ain voltage and the corresponding MIDI note (with 5V = C4).
+
 If the europi.AnalogueInput class includes the method read_voltage_and_sample(),
 then the ADC value is also displayed.
 
